@@ -1,0 +1,122 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aku Web - 导航</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .nav-list {
+            list-style: none;
+            padding: 0;
+        }
+        .nav-item {
+            margin: 10px 0;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        .nav-item:hover {
+            transform: translateX(10px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .nav-link {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-decoration: none;
+            color: #333;
+        }
+        .nav-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .nav-desc {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .nav-arrow {
+            font-size: 24px;
+            color: #4CAF50;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #f44336;
+            background-color: #ffebee;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Aku Web 导航</h1>
+        <div id="loading" class="loading">加载中...</div>
+        <ul id="navList" class="nav-list" style="display: none;"></ul>
+    </div>
+
+    <script>
+        async function loadHtmlFiles() {
+            const loadingEl = document.getElementById('loading');
+            const navListEl = document.getElementById('navList');
+
+            try {
+                const response = await fetch('/api/html/list');
+                if (!response.ok) {
+                    throw new Error('Failed to load HTML files');
+                }
+
+                const htmlFiles = await response.json();
+                
+                // 生成导航列表
+                navListEl.innerHTML = htmlFiles.map(file => `
+                    <li class="nav-item">
+                        <a href="${file.path}" class="nav-link">
+                            <div>
+                                <div class="nav-title">${file.name}</div>
+                                <div class="nav-desc">${file.description}</div>
+                            </div>
+                            <span class="nav-arrow">→</span>
+                        </a>
+                    </li>
+                `).join('');
+
+                // 显示导航列表，隐藏加载提示
+                loadingEl.style.display = 'none';
+                navListEl.style.display = 'block';
+            } catch (error) {
+                loadingEl.className = 'error';
+                loadingEl.textContent = '加载失败: ' + error.message;
+            }
+        }
+
+        // 页面加载完成后加载 HTML 文件列表
+        document.addEventListener('DOMContentLoaded', loadHtmlFiles);
+    </script>
+</body>
+</html>

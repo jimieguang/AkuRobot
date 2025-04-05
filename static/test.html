@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>静态文件服务器测试页面</title>
+    <link rel="stylesheet" href="/css/test.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 20px;
+        }
+        .content {
+            line-height: 1.6;
+        }
+        .feature-list {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .feature-list li {
+            margin-bottom: 10px;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .button:hover {
+            background-color: #2980b9;
+        }
+        .image-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .image-container img {
+            max-width: 100%;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], 
+        input[type="email"], 
+        textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>静态文件服务器测试页面</h1>
+            <p>这是一个用于测试静态文件服务器功能的示例页面</p>
+        </div>
+        
+        <div class="content">
+            <h2>功能测试</h2>
+            <p>这个页面包含了多种HTML元素和CSS样式，用于测试静态文件服务器的功能是否正常。</p>
+            
+            <h3>文本格式测试</h3>
+            <p>这是一个普通段落，包含<strong>粗体</strong>、<em>斜体</em>和<u>下划线</u>文本。</p>
+            <p>这是一个<code>代码</code>示例和<mark>高亮</mark>文本。</p>
+            
+            <h3>列表测试</h3>
+            <div class="feature-list">
+                <h4>无序列表：</h4>
+                <ul>
+                    <li>列表项 1</li>
+                    <li>列表项 2</li>
+                    <li>列表项 3</li>
+                    <li>列表项 4</li>
+                </ul>
+                
+                <h4>有序列表：</h4>
+                <ol>
+                    <li>第一步</li>
+                    <li>第二步</li>
+                    <li>第三步</li>
+                </ol>
+            </div>
+            
+            <h3>链接测试</h3>
+            <p>这是一个<a href="index.html">内部链接</a>，指向首页。</p>
+            <p>这是一个<a href="https://www.example.com" target="_blank">外部链接</a>，会在新标签页打开。</p>
+            
+            <h3>按钮测试</h3>
+            <a href="#" class="button">点击按钮</a>
+            <button class="button">原生按钮</button>
+            
+            <h3>表单测试</h3>
+            <form>
+                <div class="form-group">
+                    <label for="name">姓名：</label>
+                    <input type="text" id="name" name="name" placeholder="请输入您的姓名">
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">邮箱：</label>
+                    <input type="email" id="email" name="email" placeholder="请输入您的邮箱">
+                </div>
+                
+                <div class="form-group">
+                    <label for="message">留言：</label>
+                    <textarea id="message" name="message" rows="4" placeholder="请输入您的留言"></textarea>
+                </div>
+                
+                <button type="submit" class="button">提交表单</button>
+            </form>
+            
+            <h3>表格测试</h3>
+            <table style="width:100%; border-collapse: collapse; margin: 20px 0;">
+                <thead>
+                    <tr>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">标题1</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">标题2</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">标题3</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">内容1</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">内容2</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">内容3</td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">内容4</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">内容5</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">内容6</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="footer">
+            <p>静态文件服务器测试页面 &copy; 2023</p>
+            <p>使用 Go 语言构建的简单静态文件服务器</p>
+        </div>
+    </div>
+    
+    <!-- 引入测试JavaScript文件 -->
+    <script src="/js/test.js"></script>
+</body>
+</html> 

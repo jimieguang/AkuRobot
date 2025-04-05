@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐播放器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .player-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .input-group {
+            margin: 20px 0;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .play-button, .stop-button, .vip-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+            font-size: 14px;
+        }
+        .play-button {
+            background-color: #4CAF50;
+        }
+        .play-button:hover {
+            background-color: #45a049;
+        }
+        .stop-button {
+            background-color: #f44336;
+        }
+        .stop-button:hover {
+            background-color: #da190b;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #e8f5e9;
+            display: none;
+        }
+        .status.error {
+            background-color: #ffebee;
+        }
+        .volume-control {
+            margin-top: 20px;
+            padding: 10px;
+            border-top: 1px solid #eee;
+        }
+        .volume-slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .volume-value {
+            text-align: center;
+            color: #666;
+        }
+        .tab-container {
+            margin-bottom: 20px;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: #666;
+        }
+        .tab-button.active {
+            color: #4CAF50;
+            border-bottom: 2px solid #4CAF50;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px 0;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .song-list {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .song-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .song-item:last-child {
+            border-bottom: none;
+        }
+        .song-info {
+            flex: 1;
+        }
+        .song-title {
+            font-weight: bold;
+        }
+        .song-artist {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .song-item button {
+            margin-left: 10px;
+        }
+        .vip-button {
+            background-color: #f44336;
+            cursor: not-allowed;
+        }
+        .vip-button:hover {
+            background-color: #da190b;
+        }
+    </style>
+</head>
+<body>
+    <div class="player-container">
+        <h1>音乐播放器</h1>
+        
+        <div class="tab-container">
+            <button class="tab-button active" onclick="switchTab('stream')">流媒体</button>
+            <button class="tab-button" onclick="switchTab('playlist')">网易云歌单</button>
+        </div>
+
+        <div id="stream-tab" class="tab-content active">
+            <div class="input-group">
+                <label for="urlInput">流媒体 URL</label>
+                <input type="text" id="urlInput" placeholder="输入流媒体 URL">
+            </div>
+            <div class="button-group">
+                <button class="play-button" onclick="streamPlayer.playStream()">播放</button>
+                <button class="stop-button" onclick="streamPlayer.stopStream()">停止</button>
+            </div>
+        </div>
+
+        <div id="playlist-tab" class="tab-content">
+            <div class="input-group">
+                <label for="playlistInput">歌单 ID</label>
+                <input type="text" id="playlistInput" placeholder="输入网易云歌单ID">
+                <button class="play-button" onclick="playlistPlayer.loadPlaylist()">加载歌单</button>
+            </div>
+            <div class="song-list" id="songList"></div>
+            <div class="button-group">
+                <button class="play-button" onclick="playlistPlayer.playPlaylist(false)">顺序播放</button>
+                <button class="play-button" onclick="playlistPlayer.playPlaylist(true)">随机播放</button>
+                <button class="stop-button" onclick="playlistPlayer.stopPlaylist()">停止</button>
+            </div>
+        </div>
+
+        <div class="volume-control">
+            <label for="volumeSlider">音量控制</label>
+            <input type="range" id="volumeSlider" class="volume-slider" min="0" max="63" step="1">
+            <div class="volume-value" id="volumeValue">当前音量: 0</div>
+        </div>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            // 更新按钮状态
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
+
+            // 更新内容显示
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        const streamPlayer = {
+            playStream: async function() {
+                const url = document.getElementById('urlInput').value;
+                if (!url) {
+                    showStatus('请输入有效的 URL', true);
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/stream/play', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ url }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('播放失败');
+                    }
+
+                    showStatus(`正在播放: ${url}`);
+                } catch (error) {
+                    showStatus('播放失败: ' + error.message, true);
+                }
+            },
+
+            stopStream: async function() {
+                try {
+                    const response = await fetch('/api/stream/stop', {
+                        method: 'POST'
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('停止播放失败');
+                    }
+
+                    showStatus('已停止播放');
+                } catch (error) {
+                    showStatus('停止播放失败: ' + error.message, true);
+                }
+            }
+        };
+
+        const playlistPlayer = {
+            currentSongs: [],
+
+            loadPlaylist: async function() {
+                const playlistId = document.getElementById('playlistInput').value;
+                if (!playlistId) {
+                    showStatus('请输入歌单ID', true);
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/playlist/detail?id=${playlistId}`);
+                    if (!response.ok) {
+                        throw new Error('加载歌单失败');
+                    }
+
+                    const result = await response.json();
+                    this.currentSongs = result.songs;
+                    this.displaySongs();
+                    showStatus(`成功加载歌单，共 ${result.songs.length} 首歌`);
+                } catch (error) {
+                    showStatus('加载歌单失败: ' + error.message, true);
+                }
+            },
+
+            displaySongs: function() {
+                const songList = document.getElementById('songList');
+                songList.innerHTML = this.currentSongs.map((song, index) => `
+                    <div class="song-item">
+                        <div class="song-info">
+                            <div class="song-title">${song.name}</div>
+                            <div class="song-artist">${song.artists.join('/')}</div>
+                        </div>
+                        ${song.url ? 
+                            `<button class="play-button" onclick="playlistPlayer.playSong(${index})">播放</button>` :
+                            `<button class="vip-button" title="VIP 专属歌曲">🚫VIP</button>`
+                        }
+                    </div>
+                `).join('');
+            },
+
+            playSong: async function(index) {
+                const song = this.currentSongs[index];
+                if (!song || !song.url) {
+                    showStatus('无法播放：VIP 专属歌曲', true);
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/stream/play', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ url: song.url }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('播放失败');
+                    }
+
+                    showStatus(`正在播放: ${song.name} - ${song.artists.join('/')}`);
+                } catch (error) {
+                    showStatus('播放失败: ' + error.message, true);
+                }
+            },
+
+            playPlaylist: async function(random) {
+                const playlistId = document.getElementById('playlistInput').value;
+                if (!playlistId) {
+                    showStatus('请输入歌单ID', true);
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/playlist/play', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            playlist_id: playlistId,
+                            random: random
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('播放歌单失败');
+                    }
+
+                    const result = await response.json();
+                    showStatus(`正在播放歌单，共 ${result.total_tracks} 首歌`);
+                } catch (error) {
+                    showStatus('播放歌单失败: ' + error.message, true);
+                }
+            },
+
+            stopPlaylist: function() {
+                streamPlayer.stopStream();
+            }
+        };
+
+        function showStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.style.display = 'block';
+            status.className = 'status' + (isError ? ' error' : '');
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 3000);
+        }
+
+        // 音量控制相关函数
+        const volumeControl = {
+            init: async function() {
+                try {
+                    const response = await fetch('/api/volume/get');
+                    if (!response.ok) {
+                        throw new Error('获取音量失败');
+                    }
+                    const data = await response.json();
+                    const volume = parseInt(data.volume);
+                    
+                    const slider = document.getElementById('volumeSlider');
+                    const volumeValue = document.getElementById('volumeValue');
+                    
+                    slider.value = volume;
+                    volumeValue.textContent = `当前音量: ${volume}`;
+                } catch (error) {
+                    console.error('初始化音量失败:', error);
+                }
+            },
+
+            setVolume: async function(volume) {
+                try {
+                    const response = await fetch('/api/volume/set', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ volume: volume.toString() }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('设置音量失败');
+                    }
+
+                    document.getElementById('volumeValue').textContent = `当前音量: ${volume}`;
+                } catch (error) {
+                    console.error('设置音量失败:', error);
+                }
+            }
+        };
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            volumeControl.init();
+
+            const slider = document.getElementById('volumeSlider');
+            let timeoutId = null;
+
+            slider.addEventListener('input', function() {
+                document.getElementById('volumeValue').textContent = `当前音量: ${this.value}`;
+            });
+
+            slider.addEventListener('change', function() {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                }
+                
+                timeoutId = setTimeout(() => {
+                    volumeControl.setVolume(this.value);
+                }, 100);
+            });
+
+            // 从 localStorage 恢复上次的输入
+            const lastUrl = localStorage.getItem('lastStreamUrl');
+            if (lastUrl) {
+                document.getElementById('urlInput').value = lastUrl;
+            }
+
+            const lastPlaylistId = localStorage.getItem('lastPlaylistId');
+            if (lastPlaylistId) {
+                document.getElementById('playlistInput').value = lastPlaylistId;
+            }
+
+            // 保存输入到 localStorage
+            document.getElementById('urlInput').addEventListener('change', function() {
+                localStorage.setItem('lastStreamUrl', this.value);
+            });
+
+            document.getElementById('playlistInput').addEventListener('change', function() {
+                localStorage.setItem('lastPlaylistId', this.value);
+            });
+        });
+    </script>
+</body>
+</html> 

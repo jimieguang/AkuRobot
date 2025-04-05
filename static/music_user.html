@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐播放器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .player-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .music-list {
+            margin-top: 20px;
+        }
+        .music-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .music-item:hover {
+            background-color: #f0f0f0;
+        }
+        .music-item.active {
+            background-color: #e3f2fd;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        .play-button, .stop-button {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: white;
+        }
+        .play-button {
+            background-color: #4CAF50;
+        }
+        .play-button:hover {
+            background-color: #45a049;
+        }
+        .stop-button {
+            background-color: #f44336;
+        }
+        .stop-button:hover {
+            background-color: #da190b;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #e8f5e9;
+            display: none;
+        }
+        .status.error {
+            background-color: #ffebee;
+        }
+        .volume-control {
+            margin-top: 20px;
+            padding: 10px;
+            border-top: 1px solid #eee;
+        }
+        .volume-slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .volume-value {
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="player-container">
+        <h1>音乐播放器</h1>
+        <div class="music-list" id="musicList">
+            <!-- 音乐列表将通过JavaScript动态加载 -->
+        </div>
+        <div class="volume-control">
+            <label for="volumeSlider">音量控制</label>
+            <input type="range" id="volumeSlider" class="volume-slider" min="0" max="63" step="1">
+            <div class="volume-value" id="volumeValue">当前音量: 0</div>
+        </div>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const volumeControl = {
+            init: async function() {
+                try {
+                    const response = await fetch('/api/volume/get');
+                    if (!response.ok) {
+                        throw new Error('获取音量失败');
+                    }
+                    const data = await response.json();
+                    const volume = parseInt(data.volume);
+                    
+                    const slider = document.getElementById('volumeSlider');
+                    const volumeValue = document.getElementById('volumeValue');
+                    
+                    slider.value = volume;
+                    volumeValue.textContent = `当前音量: ${volume}`;
+                } catch (error) {
+                    console.error('初始化音量失败:', error);
+                }
+            },
+
+            setVolume: async function(volume) {
+                try {
+                    const response = await fetch('/api/volume/set', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ volume: volume.toString() }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('设置音量失败');
+                    }
+
+                    document.getElementById('volumeValue').textContent = `当前音量: ${volume}`;
+                } catch (error) {
+                    console.error('设置音量失败:', error);
+                }
+            }
+        };
+
+        const musicPlayer = {
+            currentPlaying: null,
+
+            loadMusicList: async function() {
+                try {
+                    const response = await fetch('/api/music/list');
+                    const musicList = await response.json();
+                    const container = document.getElementById('musicList');
+                    container.innerHTML = ''; // 清空现有列表
+                    
+                    musicList.forEach(music => {
+                        const div = document.createElement('div');
+                        div.className = 'music-item';
+                        div.innerHTML = `
+                            <span>${music}</span>
+                            <div class="button-group">
+                                <button class="play-button" onclick="musicPlayer.playMusic('${music}')">播放</button>
+                                <button class="stop-button" onclick="musicPlayer.stopMusic()">停止</button>
+                            </div>
+                        `;
+                        container.appendChild(div);
+                    });
+                } catch (error) {
+                    this.showStatus('加载音乐列表失败: ' + error.message, true);
+                }
+            },
+
+            playMusic: async function(filename) {
+                try {
+                    const response = await fetch('/api/music/play', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ filename }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('播放失败');
+                    }
+
+                    this.currentPlaying = filename;
+                    this.showStatus(`正在播放: ${filename}`);
+                    
+                    // 更新UI显示当前播放的歌曲
+                    document.querySelectorAll('.music-item').forEach(item => {
+                        item.classList.remove('active');
+                        if (item.querySelector('span').textContent === filename) {
+                            item.classList.add('active');
+                        }
+                    });
+                } catch (error) {
+                    this.showStatus('播放失败: ' + error.message, true);
+                }
+            },
+
+            stopMusic: async function() {
+                try {
+                    const response = await fetch('/api/music/stop', {
+                        method: 'POST'
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('停止播放失败');
+                    }
+
+                    this.currentPlaying = null;
+                    this.showStatus('已停止播放');
+                    
+                    // 清除所有active状态
+                    document.querySelectorAll('.music-item').forEach(item => {
+                        item.classList.remove('active');
+                    });
+                } catch (error) {
+                    this.showStatus('停止播放失败: ' + error.message, true);
+                }
+            },
+
+            showStatus: function(message, isError = false) {
+                const status = document.getElementById('status');
+                status.textContent = message;
+                status.style.display = 'block';
+                status.className = 'status' + (isError ? ' error' : '');
+                
+                // 3秒后自动隐藏
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 5000);
+            }
+        };
+
+        // 页面加载时初始化
+        window.onload = function() {
+            musicPlayer.loadMusicList();
+            volumeControl.init();
+
+            const slider = document.getElementById('volumeSlider');
+            let timeoutId = null;
+
+            slider.addEventListener('input', function() {
+                document.getElementById('volumeValue').textContent = `当前音量: ${this.value}`;
+            });
+
+            slider.addEventListener('change', function() {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                }
+                
+                timeoutId = setTimeout(() => {
+                    volumeControl.setVolume(this.value);
+                }, 100);
+            });
+        };
+    </script>
+</body>
+</html> 

@@ -1,0 +1,57 @@
+/* 测试CSS加载 */
+/* 这个文件用于测试静态文件服务器是否正确加载外部CSS文件 */
+
+/* 添加一些额外的样式 */
+.container {
+    position: relative;
+}
+
+/* 添加一个测试用的动画效果 */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.content {
+    animation: fadeIn 1s ease-in-out;
+}
+
+/* 添加一些悬停效果 */
+.feature-list:hover {
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    transition: box-shadow 0.3s ease;
+}
+
+/* 添加一些响应式样式 */
+@media (max-width: 600px) {
+    .container {
+        padding: 10px;
+    }
+    
+    h1 {
+        font-size: 24px;
+    }
+    
+    h2 {
+        font-size: 20px;
+    }
+    
+    h3 {
+        font-size: 18px;
+    }
+}
+
+/* 添加一些打印样式 */
+@media print {
+    body {
+        background-color: white;
+    }
+    
+    .container {
+        box-shadow: none;
+    }
+    
+    .button {
+        display: none;
+    }
+} 

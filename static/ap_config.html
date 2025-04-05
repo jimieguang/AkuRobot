@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AP 配网</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .config-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .submit-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .submit-button:hover {
+            background-color: #45a049;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .status.success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        .status.error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .network-status {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #fff3e0;
+            color: #e65100;
+        }
+    </style>
+</head>
+<body>
+    <div class="config-container">
+        <h1>AP 配网</h1>
+        <div class="network-status" id="networkStatus">
+            设备未连接到网络，请配置 WiFi
+        </div>
+        <div class="form-group">
+            <label for="ssid">WiFi 名称 (SSID)</label>
+            <input type="text" id="ssid" placeholder="输入 WiFi 名称">
+        </div>
+        <div class="form-group">
+            <label for="password">WiFi 密码</label>
+            <input type="password" id="password" placeholder="输入 WiFi 密码">
+        </div>
+        <button class="submit-button" onclick="submitConfig()">配置网络</button>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        async function submitConfig() {
+            const ssid = document.getElementById('ssid').value;
+            const password = document.getElementById('password').value;
+            const status = document.getElementById('status');
+
+            try {
+                const response = await fetch('/api/ap/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ ssid, password }),
+                });
+
+                if (!response.ok) {
+                    throw new Error('配网失败');
+                }
+
+                status.textContent = '配网成功！正在重启设备...';
+                status.className = 'status success';
+                status.style.display = 'block';
+
+                // 等待一段时间后开始检查网络连接
+                setTimeout(checkConnection, 10000);
+            } catch (error) {
+                status.textContent = '配网失败: ' + error.message;
+                status.className = 'status error';
+                status.style.display = 'block';
+            }
+        }
+
+        // 检查网络连接状态
+        async function checkConnection() {
+            try {
+                const response = await fetch('http://baidu.com', {
+                    mode: 'no-cors'  // 允许跨域请求
+                });
+                // 如果能够访问外网，重定向到主页
+                window.location.href = '/';
+            } catch (error) {
+                // 如果还没连接成功，继续检查
+                setTimeout(checkConnection, 5000);
+            }
+        }
+    </script>
+</body>
+</html> 
