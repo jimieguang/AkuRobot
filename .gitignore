@@ -30,6 +30,8 @@ Thumbs.db
 # 二进制文件
 /bin/
 /release/
+release/
+release/*
 
 # 临时文件
 /tmp/
