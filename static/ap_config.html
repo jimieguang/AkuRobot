@@ -7,16 +7,28 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
             background-color: #f5f5f5;
+            padding: 20px;
+            margin: 0;
         }
         .config-container {
             background-color: white;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .network-status {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #fff3e0;
+            color: #e65100;
         }
         .form-group {
             margin-bottom: 15px;
@@ -24,23 +36,44 @@
         .form-group label {
             display: block;
             margin-bottom: 5px;
+            color: #333;
         }
         .form-group input {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            box-sizing: border-box;
         }
-        .submit-button {
-            background-color: #4CAF50;
-            color: white;
+        .btn {
             padding: 10px 20px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
         }
-        .submit-button:hover {
-            background-color: #45a049;
+        .btn-primary {
+            background-color: #1976d2;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #1565c0;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+            margin-top: 20px;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
         }
         .status {
             margin-top: 20px;
@@ -56,12 +89,52 @@
             background-color: #ffebee;
             color: #c62828;
         }
-        .network-status {
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal.show {
+            display: block;
+        }
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            position: relative;
+        }
+        .modal-header {
+            margin-bottom: 15px;
+        }
+        .modal-title {
+            margin: 0;
+            color: #333;
+        }
+        .modal-close {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            font-size: 20px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: #666;
+        }
+        .modal-body {
             margin-bottom: 20px;
-            padding: 10px;
-            border-radius: 4px;
-            background-color: #fff3e0;
-            color: #e65100;
+        }
+        .modal-footer {
+            text-align: right;
+        }
+        .modal-footer button {
+            margin-left: 10px;
         }
     </style>
 </head>
@@ -71,19 +144,59 @@
         <div class="network-status" id="networkStatus">
             设备未连接到网络，请配置 WiFi
         </div>
-        <div class="form-group">
-            <label for="ssid">WiFi 名称 (SSID)</label>
-            <input type="text" id="ssid" placeholder="输入 WiFi 名称">
+        
+        <form id="wifiForm">
+            <div class="form-group">
+                <label for="ssid">WiFi 名称 (SSID)</label>
+                <input type="text" id="ssid" placeholder="输入 WiFi 名称" required>
+            </div>
+            <div class="form-group">
+                <label for="password">WiFi 密码</label>
+                <input type="password" id="password" placeholder="输入 WiFi 密码">
+            </div>
+            <button type="submit" class="btn btn-primary">配置网络</button>
+        </form>
+
+        <div class="status" id="status"></div>
+        
+        <button id="rebootBtn" class="btn btn-danger">重启设备</button>
+    </div>
+
+    <!-- 重启确认对话框 -->
+    <div id="rebootConfirmModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">确认重启</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                确定要重启设备吗？
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn btn-danger" id="confirmReboot">确认重启</button>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="password">WiFi 密码</label>
-            <input type="password" id="password" placeholder="输入 WiFi 密码">
-        </div>
-        <button class="submit-button" onclick="submitConfig()">配置网络</button>
-        <div id="status" class="status"></div>
     </div>
 
     <script>
+        // 模态框控制
+        const modal = document.getElementById('rebootConfirmModal');
+        
+        function showModal() {
+            modal.classList.add('show');
+        }
+        
+        function closeModal() {
+            modal.classList.remove('show');
+        }
+
+        // 表单提交处理
+        document.getElementById('wifiForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await submitConfig();
+        });
+
         async function submitConfig() {
             const ssid = document.getElementById('ssid').value;
             const password = document.getElementById('password').value;
@@ -106,7 +219,6 @@
                 status.className = 'status success';
                 status.style.display = 'block';
 
-                // 等待一段时间后开始检查网络连接
                 setTimeout(checkConnection, 10000);
             } catch (error) {
                 status.textContent = '配网失败: ' + error.message;
@@ -115,19 +227,40 @@
             }
         }
 
-        // 检查网络连接状态
         async function checkConnection() {
             try {
                 const response = await fetch('http://baidu.com', {
-                    mode: 'no-cors'  // 允许跨域请求
+                    mode: 'no-cors'
                 });
-                // 如果能够访问外网，重定向到主页
                 window.location.href = '/';
             } catch (error) {
-                // 如果还没连接成功，继续检查
                 setTimeout(checkConnection, 5000);
             }
         }
+
+        // 重启功能
+        document.getElementById('rebootBtn').addEventListener('click', showModal);
+
+        document.getElementById('confirmReboot').addEventListener('click', async function() {
+            try {
+                const response = await fetch('/api/system/reboot', {
+                    method: 'POST',
+                });
+                
+                if (response.ok) {
+                    alert('设备正在重启...');
+                    closeModal();
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    alert('重启失败，请稍后重试');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('重启失败，请稍后重试');
+            }
+        });
     </script>
 </body>
 </html> 

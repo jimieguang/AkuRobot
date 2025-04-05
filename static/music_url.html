@@ -117,13 +117,20 @@
         }
         .song-info {
             flex: 1;
+            overflow: hidden;
         }
         .song-title {
             font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .song-artist {
             font-size: 0.9em;
             color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .song-item button {
             margin-left: 10px;
@@ -131,9 +138,34 @@
         .vip-button {
             background-color: #f44336;
             cursor: not-allowed;
+            opacity: 0.7;
         }
-        .vip-button:hover {
-            background-color: #da190b;
+        .vip-button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .play-button.loading {
+            background-color: #FFA726;
+        }
+        .play-button.loading:hover {
+            background-color: #FB8C00;
+        }
+        .status.loading {
+            background-color: #fff3e0;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        .vip-song {
+            background-color: rgba(244, 67, 54, 0.05);
+        }
+        .play-button:disabled {
+            opacity: 0.7;
+            cursor: wait;
         }
     </style>
 </head>
@@ -165,8 +197,6 @@
             </div>
             <div class="song-list" id="songList"></div>
             <div class="button-group">
-                <button class="play-button" onclick="playlistPlayer.playPlaylist(false)">顺序播放</button>
-                <button class="play-button" onclick="playlistPlayer.playPlaylist(true)">随机播放</button>
                 <button class="stop-button" onclick="playlistPlayer.stopPlaylist()">停止</button>
             </div>
         </div>
@@ -204,7 +234,7 @@
                 }
 
                 try {
-                    const response = await fetch('/api/stream/play', {
+                    const response = await fetch('/api/music/stream', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -224,7 +254,7 @@
 
             stopStream: async function() {
                 try {
-                    const response = await fetch('/api/stream/stop', {
+                    const response = await fetch('/api/music/stop', {
                         method: 'POST'
                     });
 
@@ -242,6 +272,29 @@
         const playlistPlayer = {
             currentSongs: [],
 
+            displaySongs: function() {
+                const songList = document.getElementById('songList');
+                songList.innerHTML = this.currentSongs.map((song, index) => `
+                    <div class="song-item ${song.fee === 1 ? 'vip-song' : ''}">
+                        <div class="song-info">
+                            <div class="song-title">${song.name}</div>
+                            <div class="song-artist">${song.artists.join('/')}</div>
+                        </div>
+                        ${this.getPlayButton(song, index)}
+                    </div>
+                `).join('');
+            },
+
+            getPlayButton: function(song, index) {
+                if (song.fee === 1) {
+                    return `<button class="vip-button" disabled title="VIP 专属歌曲">VIP</button>`;
+                }
+                if (song.url) {
+                    return `<button class="play-button" onclick="playlistPlayer.playSong(${index})">播放</button>`;
+                }
+                return `<button class="play-button loading" onclick="playlistPlayer.playSong(${index})" title="点击获取播放地址">获取</button>`;
+            },
+
             loadPlaylist: async function() {
                 const playlistId = document.getElementById('playlistInput').value;
                 if (!playlistId) {
@@ -250,53 +303,89 @@
                 }
 
                 try {
+                    showStatus('正在加载歌单...', false, true);
                     const response = await fetch(`/api/playlist/detail?id=${playlistId}`);
                     if (!response.ok) {
                         throw new Error('加载歌单失败');
                     }
 
                     const result = await response.json();
+                    if (!result.songs || result.songs.length === 0) {
+                        throw new Error('歌单为空或无法访问');
+                    }
+
                     this.currentSongs = result.songs;
                     this.displaySongs();
-                    showStatus(`成功加载歌单，共 ${result.songs.length} 首歌`);
+                    
+                    // 统计可播放和 VIP 歌曲数量
+                    const playableSongs = result.songs.filter(s => s.url).length;
+                    const vipSongs = result.songs.filter(s => s.fee === 1).length;
+                    const pendingSongs = result.songs.filter(s => !s.url && s.fee !== 1).length;
+                    
+                    let status = `成功加载歌单，共 ${result.songs.length} 首歌`;
+                    if (playableSongs) status += `，${playableSongs} 首可播放`;
+                    if (vipSongs) status += `，${vipSongs} 首VIP`;
+                    if (pendingSongs) status += `，${pendingSongs} 首待获取`;
+                    
+                    showStatus(status, false, false);
                 } catch (error) {
                     showStatus('加载歌单失败: ' + error.message, true);
                 }
             },
 
-            displaySongs: function() {
-                const songList = document.getElementById('songList');
-                songList.innerHTML = this.currentSongs.map((song, index) => `
-                    <div class="song-item">
-                        <div class="song-info">
-                            <div class="song-title">${song.name}</div>
-                            <div class="song-artist">${song.artists.join('/')}</div>
-                        </div>
-                        ${song.url ? 
-                            `<button class="play-button" onclick="playlistPlayer.playSong(${index})">播放</button>` :
-                            `<button class="vip-button" title="VIP 专属歌曲">🚫VIP</button>`
-                        }
-                    </div>
-                `).join('');
-            },
-
             playSong: async function(index) {
                 const song = this.currentSongs[index];
-                if (!song || !song.url) {
+                if (!song) {
+                    showStatus('无效的歌曲', true);
+                    return;
+                }
+
+                if (song.fee === 1) {
                     showStatus('无法播放：VIP 专属歌曲', true);
                     return;
                 }
 
                 try {
-                    const response = await fetch('/api/stream/play', {
+                    showStatus(`正在获取歌曲信息...`, false, true);
+                    
+                    // 如果没有 URL，尝试从服务器获取
+                    let url = song.url;
+                    if (!url) {
+                        const response = await fetch('/api/playlist/play', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                song_id: song.id
+                            }),
+                        });
+
+                        if (!response.ok) {
+                            throw new Error('获取歌曲信息失败');
+                        }
+
+                        const result = await response.json();
+                        if (!result.url) {
+                            throw new Error('无法获取播放地址');
+                        }
+                        url = result.url;
+                        
+                        // 更新歌曲 URL 并刷新显示
+                        this.currentSongs[index].url = url;
+                        this.displaySongs();
+                    }
+
+                    // 播放歌曲
+                    const playResponse = await fetch('/api/music/stream', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ url: song.url }),
+                        body: JSON.stringify({ url: url }),
                     });
 
-                    if (!response.ok) {
+                    if (!playResponse.ok) {
                         throw new Error('播放失败');
                     }
 
@@ -306,50 +395,22 @@
                 }
             },
 
-            playPlaylist: async function(random) {
-                const playlistId = document.getElementById('playlistInput').value;
-                if (!playlistId) {
-                    showStatus('请输入歌单ID', true);
-                    return;
-                }
-
-                try {
-                    const response = await fetch('/api/playlist/play', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            playlist_id: playlistId,
-                            random: random
-                        }),
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('播放歌单失败');
-                    }
-
-                    const result = await response.json();
-                    showStatus(`正在播放歌单，共 ${result.total_tracks} 首歌`);
-                } catch (error) {
-                    showStatus('播放歌单失败: ' + error.message, true);
-                }
-            },
-
             stopPlaylist: function() {
                 streamPlayer.stopStream();
             }
         };
 
-        function showStatus(message, isError = false) {
+        function showStatus(message, isError = false, loading = false) {
             const status = document.getElementById('status');
-            status.textContent = message;
+            status.textContent = message + (loading ? '...' : '');
             status.style.display = 'block';
-            status.className = 'status' + (isError ? ' error' : '');
+            status.className = 'status' + (isError ? ' error' : '') + (loading ? ' loading' : '');
             
-            setTimeout(() => {
-                status.style.display = 'none';
-            }, 3000);
+            if (!loading) {
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 5000);
+            }
         }
 
         // 音量控制相关函数

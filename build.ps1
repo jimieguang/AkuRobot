@@ -16,7 +16,7 @@ if (!(Test-Path $releaseDir)) {
 Write-Host "正在编译 ARM 版本..."
 
 # 编译到 release 目录
-& "C:\Program Files\Go\bin\go.exe" build -o "$releaseDir/aku-web"
+go build -o "$releaseDir/aku-web"
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "ARM 版本编译成功！"
