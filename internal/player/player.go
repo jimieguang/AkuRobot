@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
-	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -91,54 +89,4 @@ func StopPlayback() {
 		}
 		cmd = nil
 	}
-}
-
-// GetAudioInfo 获取音频文件信息
-func GetAudioInfo(url string) (*AudioInfo, error) {
-	// 使用 curl 和 mpg123 获取音频信息
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("curl -k -L -s '%s' | mpg123 --skip-printing -t -", url))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get audio info: %v", err)
-	}
-
-	// 解析输出信息
-	info := &AudioInfo{}
-	outputStr := string(output)
-
-	// 解析时长
-	if match := regexp.MustCompile(`Length:\s+(\d+:\d+)`).FindStringSubmatch(outputStr); len(match) > 1 {
-		timeStr := match[1]
-		parts := strings.Split(timeStr, ":")
-		if len(parts) == 2 {
-			minutes, _ := strconv.Atoi(parts[0])
-			seconds, _ := strconv.Atoi(parts[1])
-			info.Duration = float64(minutes*60 + seconds)
-		}
-	}
-
-	// 解析标题
-	if match := regexp.MustCompile(`Title:\s+(.+)`).FindStringSubmatch(outputStr); len(match) > 1 {
-		info.Title = match[1]
-	}
-
-	// 解析艺术家
-	if match := regexp.MustCompile(`Artist:\s+(.+)`).FindStringSubmatch(outputStr); len(match) > 1 {
-		info.Artist = match[1]
-	}
-
-	// 解析比特率
-	if match := regexp.MustCompile(`(\d+)\s+kbit/s`).FindStringSubmatch(outputStr); len(match) > 1 {
-		info.Bitrate, _ = strconv.Atoi(match[1])
-	}
-
-	return info, nil
-}
-
-// AudioInfo 音频文件信息结构体
-type AudioInfo struct {
-	Duration float64 `json:"duration"` // 总时长（秒）
-	Title    string  `json:"title"`    // 标题
-	Artist   string  `json:"artist"`   // 艺术家
-	Bitrate  int     `json:"bitrate"`  // 比特率
 }

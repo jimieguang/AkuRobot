@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统资源监控</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            margin-top: 0;
+            color: #333;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+        }
+        .metric {
+            margin-bottom: 15px;
+        }
+        .metric-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            color: #666;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress-value {
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease;
+        }
+        .critical {
+            background-color: #f44336;
+        }
+        .warning {
+            background-color: #ff9800;
+        }
+        .refresh-time {
+            text-align: right;
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 20px;
+        }
+        .nav-bar {
+            margin-bottom: 20px;
+        }
+        .nav-bar a {
+            color: #4CAF50;
+            text-decoration: none;
+            margin-right: 20px;
+        }
+        .nav-bar a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-bar">
+        <a href="/">返回服务页面</a>
+    </div>
+    <h1>系统资源监控</h1>
+    <div class="container">
+        <div class="card">
+            <h2>CPU 信息</h2>
+            <div class="metric">
+                <div class="metric-label">
+                    <span>总体使用率</span>
+                    <span id="cpu-usage">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="cpu-progress" class="progress-value" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="metric-label">
+                <span>CPU核心数</span>
+                <span id="cpu-cores">-</span>
+            </div>
+            <div class="metric-label">
+                <span>Go程序可用CPU数</span>
+                <span id="cpu-gomaxproc">-</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>内存使用情况</h2>
+            <div class="metric">
+                <div class="metric-label">
+                    <span>已使用</span>
+                    <span id="memory-usage">0 MB / 0 MB</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="memory-progress" class="progress-value" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>系统信息</h2>
+            <div class="metric-label">
+                <span>操作系统</span>
+                <span id="sys-os">-</span>
+            </div>
+            <div class="metric-label">
+                <span>系统架构</span>
+                <span id="sys-arch">-</span>
+            </div>
+            <div class="metric-label">
+                <span>主机名</span>
+                <span id="sys-hostname">-</span>
+            </div>
+            <div class="metric-label">
+                <span>工作目录</span>
+                <span id="sys-workdir" style="word-break: break-all;">-</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>运行时信息</h2>
+            <div class="metric-label">
+                <span>Go版本</span>
+                <span id="sys-goversion">-</span>
+            </div>
+            <div class="metric-label">
+                <span>Goroutine数量</span>
+                <span id="sys-goroutines">-</span>
+            </div>
+            <div class="metric-label">
+                <span>程序运行时间</span>
+                <span id="sys-uptime">-</span>
+            </div>
+        </div>
+    </div>
+    <div class="refresh-time">最后更新时间: <span id="last-update">-</span></div>
+
+    <script>
+        class SystemMonitor {
+            constructor() {
+                this.startTime = null;
+                this.startMonitoring();
+            }
+
+            formatBytes(bytes, decimals = 2) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const dm = decimals < 0 ? 0 : decimals;
+                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+            }
+
+            formatDuration(startTime) {
+                const now = new Date();
+                const start = new Date(startTime);
+                const diff = Math.floor((now - start) / 1000); // 秒数
+
+                const days = Math.floor(diff / (24 * 60 * 60));
+                const hours = Math.floor((diff % (24 * 60 * 60)) / (60 * 60));
+                const minutes = Math.floor((diff % (60 * 60)) / 60);
+                const seconds = diff % 60;
+
+                const parts = [];
+                if (days > 0) parts.push(`${days}天`);
+                if (hours > 0) parts.push(`${hours}小时`);
+                if (minutes > 0) parts.push(`${minutes}分`);
+                parts.push(`${seconds}秒`);
+
+                return parts.join(' ');
+            }
+
+            updateUI(data) {
+                // CPU信息
+                document.getElementById('cpu-usage').textContent = `${data.cpu.usage.toFixed(1)}%`;
+                const cpuProgress = document.getElementById('cpu-progress');
+                cpuProgress.style.width = `${data.cpu.usage}%`;
+                cpuProgress.className = `progress-value ${data.cpu.usage > 90 ? 'critical' : data.cpu.usage > 70 ? 'warning' : ''}`;
+                document.getElementById('cpu-cores').textContent = data.cpu.num_cpu;
+                document.getElementById('cpu-gomaxproc').textContent = data.cpu.go_max_proc;
+
+                // 内存信息
+                const memoryUsage = `${this.formatBytes(data.memory.used)} / ${this.formatBytes(data.memory.total)}`;
+                document.getElementById('memory-usage').textContent = memoryUsage;
+                const memoryPercent = (data.memory.used / data.memory.total) * 100;
+                const memoryProgress = document.getElementById('memory-progress');
+                memoryProgress.style.width = `${memoryPercent}%`;
+                memoryProgress.className = `progress-value ${memoryPercent > 90 ? 'critical' : memoryPercent > 70 ? 'warning' : ''}`;
+
+                // 系统信息
+                document.getElementById('sys-os').textContent = data.system.os;
+                document.getElementById('sys-arch').textContent = data.system.architecture;
+                document.getElementById('sys-hostname').textContent = data.system.hostname;
+                document.getElementById('sys-workdir').textContent = data.system.work_dir;
+                document.getElementById('sys-goversion').textContent = data.system.go_version;
+                document.getElementById('sys-goroutines').textContent = data.system.num_goroutine;
+                document.getElementById('sys-uptime').textContent = this.formatDuration(data.system.start_time);
+
+                // 更新最后更新时间
+                const now = new Date();
+                document.getElementById('last-update').textContent = 
+                    `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+            }
+
+            async fetchSystemInfo() {
+                try {
+                    const response = await fetch('/api/system/info');
+                    if (!response.ok) {
+                        throw new Error('获取系统信息失败');
+                    }
+                    const data = await response.json();
+                    this.updateUI(data);
+                } catch (error) {
+                    console.error('Error fetching system info:', error);
+                }
+            }
+
+            startMonitoring() {
+                this.fetchSystemInfo();
+                setInterval(() => this.fetchSystemInfo(), 1000);
+            }
+        }
+
+        // 初始化系统监控
+        window.addEventListener('load', () => {
+            new SystemMonitor();
+        });
+    </script>
+</body>
+</html> 

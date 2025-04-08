@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"aku-web/internal/config"
 	"aku-web/internal/netease"
 	"aku-web/internal/player"
+	"aku-web/internal/service"
 	"aku-web/internal/wifi"
 )
 
@@ -252,31 +254,6 @@ func HandlePlaylistDetail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandleGetAudioInfo 处理获取音频信息的请求
-func HandleGetAudioInfo(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var request struct {
-		URL string `json:"url"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	info, err := player.GetAudioInfo(request.URL)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get audio info: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(info)
-}
-
 // HandleGetHtmlFiles 处理获取 HTML 文件列表的请求
 func HandleGetHtmlFiles(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -318,4 +295,148 @@ func HandleGetHtmlFiles(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(htmlFiles)
+}
+
+// HandleServiceStart 处理服务启动请求
+func HandleServiceStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request struct {
+		Service string `json:"service"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	svc, err := service.GetService(request.Service)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := svc.Start(); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleServiceStop 处理服务停止请求
+func HandleServiceStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request struct {
+		Service string `json:"service"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	svc, err := service.GetService(request.Service)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := svc.Stop(); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to stop service: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// HandleServiceOutput 处理服务输出流
+func HandleServiceOutput(w http.ResponseWriter, r *http.Request) {
+	serviceName := r.URL.Query().Get("service")
+	if serviceName == "" {
+		http.Error(w, "Missing service parameter", http.StatusBadRequest)
+		return
+	}
+
+	svc, err := service.GetService(serviceName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 设置 SSE 头
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	// 获取输出通道
+	output := svc.GetOutput()
+
+	// 监控客户端断开连接
+	notify := r.Context().Done()
+
+	// 创建缓冲区用于消息组装
+	var messageBuffer strings.Builder
+
+	for {
+		select {
+		case <-notify:
+			log.Printf("Client disconnected from service: %s", serviceName)
+			return
+		case line, ok := <-output:
+			if !ok {
+				if svc.GetStatus().Running {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				return
+			}
+
+			// 处理消息
+			messageBuffer.Reset()
+			messageBuffer.WriteString("data: ")
+
+			// 处理多行消息
+			lines := strings.Split(line, "\n")
+			for i, l := range lines {
+				if i > 0 {
+					messageBuffer.WriteString("\ndata: ")
+				}
+				messageBuffer.WriteString(strings.TrimRight(l, "\r"))
+			}
+			messageBuffer.WriteString("\n\n")
+
+			// 发送完整消息
+			if _, err := fmt.Fprint(w, messageBuffer.String()); err != nil {
+				return
+			}
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+		}
+	}
+}
+
+// HandleServiceStatus 处理服务状态获取请求
+func HandleServiceStatus(w http.ResponseWriter, r *http.Request) {
+	serviceName := r.URL.Query().Get("service")
+	if serviceName == "" {
+		http.Error(w, "Missing service parameter", http.StatusBadRequest)
+		return
+	}
+
+	svc, err := service.GetService(serviceName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	status := svc.GetStatus()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
 }

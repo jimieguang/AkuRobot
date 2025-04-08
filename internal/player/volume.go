@@ -17,8 +17,10 @@ func GetVolume() (int, error) {
 		return 0, fmt.Errorf("failed to get volume: %v", err)
 	}
 
+	// tinymix 输出格式为 "35 (range 0->63)"，需要提取第一个数字
 	volumeStr := strings.TrimSpace(string(output))
-	volume, err := strconv.Atoi(volumeStr)
+	volumeNum := strings.Split(volumeStr, " ")[0]
+	volume, err := strconv.Atoi(volumeNum)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse volume: %v", err)
 	}

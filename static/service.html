@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第三方服务管理</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .service-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .service-item {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .service-name {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .control-panel {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        button.stop {
+            background-color: #f44336;
+        }
+        .output {
+            background-color: #f5f5f5;
+            color: #333;
+            padding: 12px;
+            border-radius: 4px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+        }
+        
+        /* 添加滚动条样式 */
+        .output::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .output::-webkit-scrollbar-track {
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        
+        .output::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+        
+        .output::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            display: inline-block;
+        }
+        .status.running {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .status.stopped {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: 20px;
+        }
+        
+        .volume-control input[type="range"] {
+            width: 100px;
+            height: 5px;
+            -webkit-appearance: none;
+            background: #ddd;
+            border-radius: 2px;
+            outline: none;
+        }
+        
+        .volume-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 15px;
+            height: 15px;
+            background: #4CAF50;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .volume-control span {
+            min-width: 45px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>第三方服务管理</h1>
+        <div class="service-list">
+            <div class="service-item">
+                <div class="service-header">
+                    <div class="service-name">小智AI服务</div>
+                    <div class="control-panel">
+                        <button id="xiaozhiStartBtn">启动</button>
+                        <button id="xiaozhiStopBtn" class="stop" disabled>停止</button>
+                        <div class="volume-control">
+                            <input type="range" id="volumeSlider" min="0" max="63" value="32">
+                            <span id="volumeValue">32</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="status" id="xiaozhiStatus">状态：检查中...</div>
+                <div class="output" id="xiaozhiOutput"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ServiceManager {
+            constructor(name) {
+                this.name = name;
+                this.eventSource = null;
+                this.output = document.getElementById(`${name}Output`);
+                this.startBtn = document.getElementById(`${name}StartBtn`);
+                this.stopBtn = document.getElementById(`${name}StopBtn`);
+                this.status = document.getElementById(`${name}Status`);
+                this.volumeSlider = document.getElementById('volumeSlider');
+                this.volumeValue = document.getElementById('volumeValue');
+                
+                // 初始化时获取一次状态和音量
+                this.checkInitialStatus();
+                this.initVolumeControl();
+            }
+
+            async checkInitialStatus() {
+                try {
+                    const response = await fetch(`/api/service/status?service=${this.name.toLowerCase()}`);
+                    if (!response.ok) {
+                        throw new Error('获取状态失败');
+                    }
+                    const status = await response.json();
+                    this.updateStatus(status.Running);
+                    
+                    // 如果服务在运行，则启动 SSE
+                    if (status.Running) {
+                        this.startOutput();
+                    }
+                } catch (error) {
+                    console.error('Status check failed:', error);
+                    this.updateStatus(false);
+                }
+            }
+
+            async initVolumeControl() {
+                try {
+                    const response = await fetch('/api/volume/get');
+                    if (!response.ok) {
+                        throw new Error('获取音量失败');
+                    }
+                    const data = await response.json();
+                    this.volumeSlider.value = data.volume;
+                    this.volumeValue.textContent = `${data.volume}`;
+                } catch (error) {
+                    console.error('Failed to get volume:', error);
+                }
+
+                // 添加音量控制事件监听
+                this.volumeSlider.addEventListener('input', () => {
+                    const volume = this.volumeSlider.value;
+                    this.volumeValue.textContent = `${volume}`;
+                });
+
+                this.volumeSlider.addEventListener('change', async () => {
+                    const volume = this.volumeSlider.value;
+                    try {
+                        const response = await fetch('/api/volume/set', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ volume: parseInt(volume) }),
+                        });
+                        if (!response.ok) {
+                            throw new Error('设置音量失败');
+                        }
+                    } catch (error) {
+                        console.error('Failed to set volume:', error);
+                        alert('设置音量失败');
+                    }
+                });
+            }
+
+            async start() {
+                if (!confirm(`确定要启动${this.name}服务吗？`)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/service/start', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ service: this.name.toLowerCase() }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('启动服务失败');
+                    }
+
+                    this.updateStatus(true);
+                    this.startOutput();
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+
+            async stop() {
+                if (!confirm(`确定要停止${this.name}服务吗？`)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/service/stop', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ service: this.name.toLowerCase() }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('停止服务失败');
+                    }
+
+                    this.updateStatus(false);
+                    this.stopOutput();
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
+
+            startOutput() {
+                if (this.eventSource) {
+                    this.eventSource.close();
+                }
+                
+                this.eventSource = new EventSource(`/api/service/output?service=${this.name.toLowerCase()}`);
+                
+                this.eventSource.onmessage = (event) => {
+                    // 添加时间戳和格式化
+                    const now = new Date();
+                    const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+                    
+                    // 格式化输出
+                    const formattedMessage = `[${timestamp}] ${event.data}`;
+                    
+                    // 添加到输出区域
+                    this.output.textContent += formattedMessage + '\n';
+                    
+                    // 保持滚动到底部
+                    this.output.scrollTop = this.output.scrollHeight;
+                };
+
+                this.eventSource.onerror = () => {
+                    this.stopOutput();
+                    this.updateStatus(false);
+                };
+            }
+
+            stopOutput() {
+                if (this.eventSource) {
+                    this.eventSource.close();
+                    this.eventSource = null;
+                }
+            }
+
+            updateStatus(running) {
+                this.status.textContent = `状态：${running ? '运行中' : '已停止'}`;
+                this.status.className = `status ${running ? 'running' : 'stopped'}`;
+                this.startBtn.disabled = running;
+                this.stopBtn.disabled = !running;
+            }
+        }
+
+        // 初始化服务管理器
+        const xiaozhiManager = new ServiceManager('xiaozhi');
+
+        // 添加事件监听器
+        document.getElementById('xiaozhiStartBtn').addEventListener('click', () => xiaozhiManager.start());
+        document.getElementById('xiaozhiStopBtn').addEventListener('click', () => xiaozhiManager.stop());
+    </script>
+</body>
+</html>
