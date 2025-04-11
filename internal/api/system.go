@@ -3,10 +3,14 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -87,9 +91,38 @@ func HandleSystemInfo(w http.ResponseWriter, r *http.Request) {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 
-	// 获取内存信息
-	info.Memory.Total = stats.Sys
-	info.Memory.Used = stats.Alloc
+	// 获取系统内存信息
+	memInfo, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		log.Printf("读取内存信息失败: %v", err)
+		// 如果读取失败，使用Go的内存统计作为备选
+		info.Memory.Total = stats.Sys
+		info.Memory.Used = stats.Alloc
+	} else {
+		// 解析内存信息
+		lines := strings.Split(string(memInfo), "\n")
+		var totalMem, freeMem, buffers, cached uint64
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) < 2 {
+				continue
+			}
+			value, _ := strconv.ParseUint(fields[1], 10, 64)
+			switch fields[0] {
+			case "MemTotal:":
+				totalMem = value * 1024 // 转换为字节
+			case "MemFree:":
+				freeMem = value * 1024
+			case "Buffers:":
+				buffers = value * 1024
+			case "Cached:":
+				cached = value * 1024
+			}
+		}
+		// 计算已使用内存 = 总内存 - 空闲内存 - 缓存 - 缓冲区
+		info.Memory.Total = totalMem
+		info.Memory.Used = totalMem - freeMem - buffers - cached
+	}
 
 	// CPU相关信息
 	info.CPU.Usage = getCPUUsage()
@@ -115,4 +148,27 @@ func HandleSystemInfo(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(info)
+}
+
+// HandleSyncTime 处理时间同步请求
+func HandleSyncTime(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 使用ntpdate同步时间
+	cmd := exec.Command("ntpdate", "-u", "ntp1.aliyun.com")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": fmt.Sprintf("同步时间失败: %v, 输出: %s", err, string(output)),
+		})
+		return
+	}
+	// 更新启动时间
+	startTime = time.Now()
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "时间同步成功",
+	})
 }

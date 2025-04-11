@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	// "aku-web/internal/wifi"
 )
 
@@ -26,9 +25,6 @@ func main() {
 
 	// 启动 WiFi 状态监控
 	// go wifi.StartMonitoring()
-
-	// 使用阿里云NTP服务器同步时间
-	exec.Command("ntpdate", "-u", "ntp1.aliyun.com")
 
 	// 启动 HTTP 服务器
 	log.Print("Aku Web 服务启动")

@@ -12,7 +12,7 @@ import (
 	"sync"
 )
 
-// API endpoints
+// API 端点
 const (
 	playlistDetailAPI = "https://music.163.com/api/v6/playlist/detail"
 	songDetailAPI     = "https://music.163.com/api/v3/song/detail"
@@ -28,7 +28,7 @@ var insecureClient = &http.Client{
 	},
 }
 
-// PlaylistResponse represents the response structure for playlist details
+// PlaylistResponse 表示歌单详情的响应结构
 type PlaylistResponse struct {
 	Code     int `json:"code"`
 	Playlist struct {
@@ -41,7 +41,7 @@ type PlaylistResponse struct {
 	} `json:"playlist"`
 }
 
-// SongResponse represents the response structure for song details
+// SongResponse 表示歌曲详情的响应结构
 type SongResponse struct {
 	Songs []struct {
 		Id   uint   `json:"id"`
@@ -54,7 +54,7 @@ type SongResponse struct {
 	} `json:"songs"`
 }
 
-// Song represents a song with its basic information
+// Song 表示歌曲的基本信息
 type Song struct {
 	Id      uint     `json:"id"`
 	Name    string   `json:"name"`
@@ -63,7 +63,7 @@ type Song struct {
 	Fee     int      `json:"fee"` // 1 表示 VIP 歌曲
 }
 
-// Playlist represents a playlist with its songs
+// Playlist 表示歌单及其歌曲
 type Playlist struct {
 	Id          int64  `json:"id"`
 	Name        string `json:"name"`
@@ -71,45 +71,58 @@ type Playlist struct {
 	Songs       []Song `json:"songs"`
 }
 
-// GetPlaylist retrieves playlist information and its songs by playlist ID
-func GetPlaylist(playlistId string) (*Playlist, error) {
-	// 1. Get playlist basic information
+// GetPlaylist 根据歌单ID获取歌单信息和歌曲
+func GetPlaylist(playlistId string, page, pageSize int) (*Playlist, error) {
+	// 1. 获取歌单基本信息
 	playlistInfo, err := getPlaylistInfo(playlistId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get playlist info: %w", err)
+		return nil, fmt.Errorf("获取歌单信息失败: %w", err)
 	}
 
 	if playlistInfo.Code == 401 {
-		return nil, errors.New("no permission to access this playlist")
+		return nil, errors.New("无权限访问此歌单")
 	}
 
-	// 2. Get song details in batches
+	// 2. 计算分页
+	totalSongs := len(playlistInfo.Playlist.TrackIds)
+	start := (page - 1) * pageSize
+	if start >= totalSongs {
+		return nil, fmt.Errorf("页码超出范围")
+	}
+	end := start + pageSize
+	if end > totalSongs {
+		end = totalSongs
+	}
+
+	// 3. 获取当前页的歌曲详情
 	var allSongs []Song
-	songIds := make([]uint, len(playlistInfo.Playlist.TrackIds))
-	for i, track := range playlistInfo.Playlist.TrackIds {
+	songIds := make([]uint, end-start)
+	for i, track := range playlistInfo.Playlist.TrackIds[start:end] {
 		songIds[i] = track.Id
 	}
 
+	// 4. 分批处理歌曲
 	for i := 0; i < len(songIds); i += batchSize {
-		end := i + batchSize
-		if end > len(songIds) {
-			end = len(songIds)
+		batchEnd := i + batchSize
+		if batchEnd > len(songIds) {
+			batchEnd = len(songIds)
 		}
 
-		songs, err := getSongsDetail(songIds[i:end])
+		songs, err := getSongsDetail(songIds[i:batchEnd])
 		if err != nil {
-			log.Printf("Warning: failed to get details for songs %d-%d: %v", i, end, err)
+			log.Printf("警告: 获取歌曲 %d-%d 详情失败: %v", i, batchEnd, err)
 			continue
 		}
 		allSongs = append(allSongs, songs...)
 	}
 
 	if len(allSongs) == 0 {
-		return nil, fmt.Errorf("failed to get any song details")
+		return nil, fmt.Errorf("未能获取任何歌曲详情")
 	}
 
-	// 3. Get music URLs concurrently
+	// 5. 控制并发获取音乐URL
 	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 10) // 限制并发数为5
 	urlChan := make(chan struct {
 		index int
 		url   string
@@ -119,6 +132,9 @@ func GetPlaylist(playlistId string) (*Playlist, error) {
 		wg.Add(1)
 		go func(i int, id uint) {
 			defer wg.Done()
+			semaphore <- struct{}{}        // 获取信号量
+			defer func() { <-semaphore }() // 释放信号量
+
 			url := getMusicUrl(fmt.Sprintf("%d", id))
 			if url != "" {
 				urlChan <- struct {
@@ -129,18 +145,18 @@ func GetPlaylist(playlistId string) (*Playlist, error) {
 		}(i, song.Id)
 	}
 
-	// Close channel when all goroutines are done
+	// 所有goroutine完成后关闭channel
 	go func() {
 		wg.Wait()
 		close(urlChan)
 	}()
 
-	// Collect URLs
+	// 收集URL
 	for result := range urlChan {
 		allSongs[result.index].Url = result.url
 	}
 
-	// 4. Create response
+	// 6. 创建响应
 	playlist := &Playlist{
 		Id:          playlistInfo.Playlist.Id,
 		Name:        playlistInfo.Playlist.Name,
@@ -151,32 +167,32 @@ func GetPlaylist(playlistId string) (*Playlist, error) {
 	return playlist, nil
 }
 
-// getPlaylistInfo retrieves basic playlist information
+// getPlaylistInfo 获取歌单基本信息
 func getPlaylistInfo(playlistId string) (*PlaylistResponse, error) {
-	// Create request
+	// 创建请求
 	data := strings.NewReader("id=" + playlistId)
 	req, err := http.NewRequest("POST", playlistDetailAPI, data)
 	if err != nil {
 		return nil, err
 	}
 
-	// Set headers
+	// 设置请求头
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	// Send request using insecure client
+	// 发送请求
 	resp, err := insecureClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// Read response
+	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse response
+	// 解析响应
 	playlistResp := &PlaylistResponse{}
 	if err = json.Unmarshal(body, playlistResp); err != nil {
 		return nil, err
@@ -185,50 +201,50 @@ func getPlaylistInfo(playlistId string) (*PlaylistResponse, error) {
 	return playlistResp, nil
 }
 
-// getSongsDetail retrieves detailed information for multiple songs
+// getSongsDetail 获取多首歌曲的详细信息
 func getSongsDetail(songIds []uint) ([]Song, error) {
-	// Create song ID objects for request
+	// 创建歌曲ID对象
 	songIdObjs := make([]map[string]uint, len(songIds))
 	for i, id := range songIds {
 		songIdObjs[i] = map[string]uint{"id": id}
 	}
 
-	// Marshal song IDs
+	// 序列化歌曲ID
 	jsonData, err := json.Marshal(songIdObjs)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create request
+	// 创建请求
 	data := strings.NewReader("c=" + string(jsonData))
 	req, err := http.NewRequest("POST", songDetailAPI, data)
 	if err != nil {
 		return nil, err
 	}
 
-	// Set headers
+	// 设置请求头
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	// Send request using insecure client
+	// 发送请求
 	resp, err := insecureClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// Read response
+	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse response
+	// 解析响应
 	songResp := &SongResponse{}
 	if err = json.Unmarshal(body, songResp); err != nil {
 		return nil, err
 	}
 
-	// Convert to Song objects
+	// 转换为Song对象
 	songs := make([]Song, len(songResp.Songs))
 	for i, song := range songResp.Songs {
 		artists := make([]string, len(song.Ar))
@@ -247,7 +263,7 @@ func getSongsDetail(songIds []uint) ([]Song, error) {
 	return songs, nil
 }
 
-// getMusicUrl retrieves the direct URL for a music track
+// getMusicUrl 获取音乐的直接URL
 func getMusicUrl(id string) string {
 	resp, err := insecureClient.Get("https://music.163.com/song/media/outer/url?id=" + id)
 	if err != nil {
@@ -263,7 +279,7 @@ func getMusicUrl(id string) string {
 	return resp.Request.URL.String()
 }
 
-// GetSongUrl 获取单个歌曲的 URL
+// GetSongUrl 获取单个歌曲的URL
 func GetSongUrl(id uint) (string, error) {
 	url := getMusicUrl(fmt.Sprintf("%d", id))
 	if url == "" {

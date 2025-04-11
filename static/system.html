@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -72,6 +72,33 @@
         }
         .nav-bar a:hover {
             text-decoration: underline;
+        }
+        .action-buttons {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .action-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        .sync-time {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .sync-time:hover {
+            background-color: #45a049;
+        }
+        .restart-device {
+            background-color: #f44336;
+            color: white;
+        }
+        .restart-device:hover {
+            background-color: #da190b;
         }
     </style>
 </head>
@@ -152,6 +179,11 @@
         </div>
     </div>
     <div class="refresh-time">最后更新时间: <span id="last-update">-</span></div>
+
+    <div class="action-buttons">
+        <button class="action-button sync-time" onclick="syncTime()">校准时间</button>
+        <button class="action-button restart-device" onclick="restartDevice()">重启设备</button>
+    </div>
 
     <script>
         class SystemMonitor {
@@ -243,6 +275,35 @@
         window.addEventListener('load', () => {
             new SystemMonitor();
         });
+
+        function syncTime() {
+            if (confirm('确定要校准系统时间吗？')) {
+                fetch('/api/system/sync-time', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                        new SystemMonitor().fetchSystemInfo();
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('校准时间失败');
+                    });
+            }
+        }
+
+        function restartDevice() {
+            if (confirm('确定要重启设备吗？此操作将导致服务中断！')) {
+                fetch('/api/system/reboot', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('重启设备失败');
+                    });
+            }
+        }
     </script>
 </body>
 </html> 

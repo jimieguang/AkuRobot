@@ -271,6 +271,10 @@
 
         const playlistPlayer = {
             currentSongs: [],
+            currentPage: 1,
+            pageSize: 20,
+            isLoading: false,
+            hasMore: true,
 
             displaySongs: function() {
                 const songList = document.getElementById('songList');
@@ -304,33 +308,66 @@
 
                 try {
                     showStatus('正在加载歌单...', false, true);
-                    const response = await fetch(`/api/playlist/detail?id=${playlistId}`);
+                    this.currentPage = 1;
+                    this.currentSongs = [];
+                    this.hasMore = true;
+                    await this.loadMoreSongs(playlistId);
+                } catch (error) {
+                    showStatus('加载歌单失败: ' + error.message, true);
+                }
+            },
+
+            loadMoreSongs: async function(playlistId) {
+                if (this.isLoading || !this.hasMore) return;
+
+                this.isLoading = true;
+                try {
+                    const response = await fetch(`/api/playlist/detail?id=${playlistId}&page=${this.currentPage}&pageSize=${this.pageSize}`);
                     if (!response.ok) {
                         throw new Error('加载歌单失败');
                     }
 
                     const result = await response.json();
                     if (!result.songs || result.songs.length === 0) {
-                        throw new Error('歌单为空或无法访问');
+                        this.hasMore = false;
+                        if (this.currentPage === 1) {
+                            throw new Error('歌单为空或无法访问');
+                        }
+                        return;
                     }
 
-                    this.currentSongs = result.songs;
+                    this.currentSongs = [...this.currentSongs, ...result.songs];
                     this.displaySongs();
                     
                     // 统计可播放和 VIP 歌曲数量
-                    const playableSongs = result.songs.filter(s => s.url).length;
-                    const vipSongs = result.songs.filter(s => s.fee === 1).length;
-                    const pendingSongs = result.songs.filter(s => !s.url && s.fee !== 1).length;
+                    const playableSongs = this.currentSongs.filter(s => s.url).length;
+                    const vipSongs = this.currentSongs.filter(s => s.fee === 1).length;
+                    const pendingSongs = this.currentSongs.filter(s => !s.url && s.fee !== 1).length;
                     
-                    let status = `成功加载歌单，共 ${result.songs.length} 首歌`;
+                    let status = `已加载 ${this.currentSongs.length} 首歌`;
                     if (playableSongs) status += `，${playableSongs} 首可播放`;
                     if (vipSongs) status += `，${vipSongs} 首VIP`;
                     if (pendingSongs) status += `，${pendingSongs} 首待获取`;
                     
                     showStatus(status, false, false);
+                    
+                    this.currentPage++;
                 } catch (error) {
-                    showStatus('加载歌单失败: ' + error.message, true);
+                    showStatus('加载更多歌曲失败: ' + error.message, true);
+                } finally {
+                    this.isLoading = false;
                 }
+            },
+
+            // 添加滚动加载
+            initScrollLoad: function() {
+                const songList = document.getElementById('songList');
+                songList.addEventListener('scroll', () => {
+                    if (songList.scrollHeight - songList.scrollTop <= songList.clientHeight + 100) {
+                        const playlistId = document.getElementById('playlistInput').value;
+                        this.loadMoreSongs(playlistId);
+                    }
+                });
             },
 
             playSong: async function(index) {
@@ -495,6 +532,8 @@
             document.getElementById('playlistInput').addEventListener('change', function() {
                 localStorage.setItem('lastPlaylistId', this.value);
             });
+
+            playlistPlayer.initScrollLoad();
         });
     </script>
 </body>

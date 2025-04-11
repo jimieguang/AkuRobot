@@ -195,10 +195,10 @@ func HandleApConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// HandlePlaylistPlay 处理播放歌单的请求
+// HandlePlaylistPlay 处理播放歌单歌曲的请求
 func HandlePlaylistPlay(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -206,18 +206,18 @@ func HandlePlaylistPlay(w http.ResponseWriter, r *http.Request) {
 		SongId uint `json:"song_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		http.Error(w, "无效的请求体", http.StatusBadRequest)
 		return
 	}
 
 	// 获取歌曲URL
 	url, err := netease.GetSongUrl(request.SongId)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get song URL: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("获取歌曲URL失败: %v", err), http.StatusInternalServerError)
 		return
 	}
 	if url == "" {
-		http.Error(w, "Failed to get playable URL for the song", http.StatusInternalServerError)
+		http.Error(w, "无法获取可播放的URL", http.StatusInternalServerError)
 		return
 	}
 
@@ -231,26 +231,38 @@ func HandlePlaylistPlay(w http.ResponseWriter, r *http.Request) {
 // HandlePlaylistDetail 处理获取歌单详情的请求
 func HandlePlaylistDetail(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
 		return
 	}
 
 	playlistId := r.URL.Query().Get("id")
 	if playlistId == "" {
-		http.Error(w, "Missing playlist ID", http.StatusBadRequest)
+		http.Error(w, "缺少歌单ID", http.StatusBadRequest)
 		return
 	}
 
-	playlist, err := netease.GetPlaylist(playlistId)
+	// 获取分页参数
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if pageSize < 1 {
+		pageSize = 20 // 默认每页20首
+	}
+
+	playlist, err := netease.GetPlaylist(playlistId, page, pageSize)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get playlist: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("获取歌单失败: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "success",
-		"songs":  playlist.Songs,
+		"status":   "success",
+		"songs":    playlist.Songs,
+		"page":     page,
+		"pageSize": pageSize,
 	})
 }
 
