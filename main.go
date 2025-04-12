@@ -1,6 +1,7 @@
 package main
 
 import (
+	"aku-web/internal/player"
 	"aku-web/internal/server"
 	"io"
 	"log"
@@ -28,6 +29,9 @@ func main() {
 
 	// 启动 HTTP 服务器
 	log.Print("Aku Web 服务启动")
+	// 播放启动语音
+	player.PlayLocalFile("static/boot_music/1_hello.wav")
+
 	if err := server.Start(); err != nil {
 		log.Fatalf("服务器错误: %v", err)
 	}
